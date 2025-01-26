@@ -1,5 +1,8 @@
 package dslabs.kvstore;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Result;
@@ -56,23 +59,32 @@ public class KVStore implements Application {
     @NonNull private final String value;
   }
 
-  // Your code here...
+  private Map<String, String> _data = new HashMap<String, String>();
 
   @Override
   public KVStoreResult execute(Command command) {
     if (command instanceof Get) {
       Get g = (Get) command;
-      // Your code here...
+
+      if (_data.containsKey(g.key)) {
+        return new GetResult(_data.get(g.key));
+      }
+      
+      return new KeyNotFound();
+
     }
 
     if (command instanceof Put) {
       Put p = (Put) command;
-      // Your code here...
+      _data.put(p.key, p.value);
+      return new PutOk();
     }
 
     if (command instanceof Append) {
       Append a = (Append) command;
-      // Your code here...
+      String newString = _data.getOrDefault(a.key,"") + a.value;
+      _data.put(a.key, newString);
+      return new AppendResult(newString);
     }
 
     throw new IllegalArgumentException();
