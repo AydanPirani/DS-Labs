@@ -19,6 +19,9 @@ class SimpleClient extends Node implements Client {
   private final Address serverAddress;
 
   // Your code here...
+  private Request globalRequest = null;
+  private Result globalResult = null;
+  private int globalSequenceNum = 0;
 
   /* -----------------------------------------------------------------------------------------------
    *  Construction and Initialization
@@ -38,32 +41,45 @@ class SimpleClient extends Node implements Client {
    * ---------------------------------------------------------------------------------------------*/
   @Override
   public synchronized void sendCommand(Command command) {
-    // Your code here...
+    globalResult = null;
+
+    Request currRequest = new Request(command, globalSequenceNum);
+    globalSequenceNum++;
+    globalRequest = currRequest;
+
+    send(globalRequest, serverAddress);
+    set(new ClientTimer(), 10000);
   }
 
   @Override
   public synchronized boolean hasResult() {
-    // Your code here...
-    return false;
+    return globalResult != null;
   }
 
   @Override
   public synchronized Result getResult() throws InterruptedException {
-    // Your code here...
-    return null;
+    if (globalResult == null) {
+      wait();
+    }
+    
+    return globalResult;
   }
 
   /* -----------------------------------------------------------------------------------------------
    *  Message Handlers
    * ---------------------------------------------------------------------------------------------*/
   private synchronized void handleReply(Reply m, Address sender) {
-    // Your code here...
+    if (m.sequenceNum() == globalRequest.sequenceNum()) {
+      globalRequest = null;
+      globalResult = m.result();
+    }
   }
 
   /* -----------------------------------------------------------------------------------------------
    *  Timer Handlers
    * ---------------------------------------------------------------------------------------------*/
   private synchronized void onClientTimer(ClientTimer t) {
-    // Your code here...
+    send(globalRequest, serverAddress);
+    set(new ClientTimer(), ClientTimer.CLIENT_RETRY_MILLIS);
   }
 }
