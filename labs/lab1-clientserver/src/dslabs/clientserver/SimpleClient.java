@@ -1,5 +1,9 @@
 package dslabs.clientserver;
 
+import org.checkerframework.checker.units.qual.A;
+
+import dslabs.atmostonce.AMOCommand;
+import dslabs.atmostonce.AMOResult;
 import dslabs.framework.Address;
 import dslabs.framework.Client;
 import dslabs.framework.Command;
@@ -34,6 +38,7 @@ class SimpleClient extends Node implements Client {
   @Override
   public synchronized void init() {
     // No initialization necessary
+    set(new ClientTimer(), ClientTimer.CLIENT_RETRY_MILLIS);
   }
 
   /* -----------------------------------------------------------------------------------------------
@@ -42,13 +47,11 @@ class SimpleClient extends Node implements Client {
   @Override
   public synchronized void sendCommand(Command command) {
     globalResult = null;
-
-    Request currRequest = new Request(command, globalSequenceNum);
-    globalSequenceNum++;
-    globalRequest = currRequest;
+    
+    AMOCommand amoCommand = new AMOCommand(command, globalSequenceNum, address());
+    globalRequest = new Request(amoCommand);;
 
     send(globalRequest, serverAddress);
-    set(new ClientTimer(), 10000);
   }
 
   @Override
@@ -69,9 +72,13 @@ class SimpleClient extends Node implements Client {
    *  Message Handlers
    * ---------------------------------------------------------------------------------------------*/
   private synchronized void handleReply(Reply m, Address sender) {
-    if (m.sequenceNum() == globalRequest.sequenceNum()) {
+    AMOResult result = m.result();
+
+    if (globalRequest != null && result.sequenceNum() == globalSequenceNum) {
       globalRequest = null;
-      globalResult = m.result();
+      globalResult = m.result().result();
+      globalSequenceNum++;
+      notify();
     }
   }
 
@@ -79,7 +86,10 @@ class SimpleClient extends Node implements Client {
    *  Timer Handlers
    * ---------------------------------------------------------------------------------------------*/
   private synchronized void onClientTimer(ClientTimer t) {
-    send(globalRequest, serverAddress);
+    if (globalRequest != null) {
+      send(globalRequest, serverAddress);
+    }
+
     set(new ClientTimer(), ClientTimer.CLIENT_RETRY_MILLIS);
   }
 }

@@ -1,5 +1,15 @@
 package dslabs.atmostonce;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.PriorityQueue;
+
+import javax.swing.undo.CannotRedoException;
+
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
+
+import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Result;
@@ -16,6 +26,8 @@ public final class AMOApplication<T extends Application> implements Application 
   @Getter @NonNull private final T application;
 
   // Your code here...
+  private HashMap<Address, Integer> lastExecuted = new HashMap<>();
+  private HashMap<Address, Result> currentResults = new HashMap<>();
 
   @Override
   public AMOResult execute(Command command) {
@@ -23,10 +35,26 @@ public final class AMOApplication<T extends Application> implements Application 
       throw new IllegalArgumentException();
     }
 
-    AMOCommand amoCommand = (AMOCommand) command;
+      AMOCommand amoCommand = (AMOCommand) command;
 
-    // Your code here...
-    return null;
+      Address sender = amoCommand.sender();
+      int currentSequenceNum = amoCommand.sequenceNum();
+      int lastSequenceNum = lastExecuted.getOrDefault(sender, -1);
+  
+      // Execute
+      if (currentSequenceNum > lastSequenceNum) {
+        lastExecuted.put(sender, currentSequenceNum);
+        Result result = application.execute(amoCommand.command());
+        currentResults.put(sender, result);
+        return new AMOResult(result, currentSequenceNum);
+      }
+      
+      if (currentSequenceNum == lastSequenceNum) {
+        Result result = currentResults.get(sender);
+        return new AMOResult(result, currentSequenceNum);
+      }
+  
+      return new AMOResult(null, 0);
   }
 
   public Result executeReadOnly(Command command) {
@@ -42,7 +70,10 @@ public final class AMOApplication<T extends Application> implements Application 
   }
 
   public boolean alreadyExecuted(AMOCommand amoCommand) {
-    // Your code here...
-    return false;
+    Address sender = amoCommand.sender();
+    int currentSequenceNum = amoCommand.sequenceNum();
+    int lastSequenceNum = lastExecuted.getOrDefault(sender, 1);
+    
+    return currentSequenceNum <= lastSequenceNum;
   }
 }
